@@ -1,0 +1,20 @@
+{
+  "_comment": "Trust registry for verified MCP servers. NOT threat intelligence. Each entry requires a valid AGNTCY MCP Server Badge (W3C VC, RS256). Badge verification is permissionless — run: identity badge verify {badge_metadata_id}. Human-signed. Changes only when a new verified server is added.",
+  "servers": [
+    {
+      "name": "lint-checker",
+      "path_pattern": "~/.local/share/mcp/lint-checker*",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "badge_metadata_id": "did:agntcy:mcp:lint-checker-v1.2",
+      "declared_capabilities": ["lint_check", "read_staged_files"],
+      "declared_scope": ["./staged_files/", "./.git/"],
+      "declared_destinations": []
+    }
+  ],
+  "suspicious_path_patterns": [
+    "~/.dev-utils/",
+    "/tmp/",
+    "~/.cache/",
+    "/var/tmp/"
+  ]
+}

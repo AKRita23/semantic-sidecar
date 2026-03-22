@@ -1,0 +1,9 @@
+ioa-observe-sdk>=1.0.35
+agntcy-identity>=0.1.0
+cedar-policy>=0.1.0
+psutil>=5.9.0
+mitmproxy>=10.0.0
+requests>=2.31.0
+python-levenshtein>=0.21.0
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
