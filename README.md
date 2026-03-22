@@ -1,6 +1,6 @@
 # Semantic Sidecar
 
-A Python security research POC that detects SANDWORM_MODE-style MCP supply-chain
+A Python security research POC that detects SANDWORM_MODE and glassworm MCPInjectionMode supply-chain attacks 
 and prompt injection attacks on developer workstations in real time.
 
 ---
