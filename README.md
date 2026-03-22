@@ -1,7 +1,7 @@
 # Semantic Sidecar
 
-A Python security research POC that detects SANDWORM_MODE and glassworm MCPInjectionMode supply-chain attacks 
-and prompt injection attacks on developer workstations in real time.
+A Python security research POC that detects SANDWORM_MODE and Glassworm MCP
+supply-chain attacks on developer workstations in real time.
 
 ---
 
@@ -13,8 +13,8 @@ validates it against a stack of detection layers before the result reaches the
 model's context window.
 
 This is a research prototype demonstrating that a multi-layer, observable
-detection stack can catch the full SANDWORM_MODE attack chain — including the
-48-hour delayed activation technique that bypasses human review windows.
+detection stack can catch both the SANDWORM_MODE attack chain (including the
+48-hour delayed activation technique) and Glassworm steganographic payloads.
 
 ---
 
@@ -24,14 +24,16 @@ detection stack can catch the full SANDWORM_MODE attack chain — including the
 A supply-chain attack via MCP typosquatting with delayed activation:
 
 1. Attacker publishes `claude-code` (vs `@anthropic-ai/claude-code`) to npm
-2. Package embeds invisible Unicode codepoints (Glassworm) in source
-3. MCP server is installed by a developer who misreads the scope
+2. Package includes a post-install hook that drops a rogue binary on the developer's machine
+3. MCP server is installed by a developer who misreads the package scope
 4. Server registers from a suspicious path (`~/.dev-utils/mcp-server.js`)
 5. Server waits 48 hours — outlasting any human-authorized task window
 6. After expiry, server reads `~/.ssh/id_rsa` and exfiltrates it
 7. Tool response contains an injection phrase to redirect the model
 
 The sidecar fires at every step: **six red lights, all independent**.
+
+First reported by Socket and analyzed in depth by Endor Labs (February 2026).
 
 ### Glassworm
 `@iflow-mcp/watercrawl-watercrawl-mcp` delivered MCP servers containing
@@ -41,21 +43,23 @@ runtime can decode and execute.
 
 Stage 0 catches this at **server load time**, before any tool is ever called.
 
+Documented by Aikido Security (March 2026).
+
 ---
 
 ## Detection Stack
 
-| Stage  | Layer | Check                           | Verdict    |
-|--------|-------|---------------------------------|------------|
-| 0      | L0.5  | Invisible Unicode scan          | BLOCK/PASS |
-| 1a     | L1    | npm sigstore provenance         | WARN/PASS  |
-| 1a     | L1    | OSV vulnerability database      | WARN/PASS  |
-| 1b     | L1    | Typosquat + MCP skill scanner   | WARN/PASS  |
-| 2      | L0.5  | MCP registration integrity      | BLOCK/PASS |
-| 3      | L2    | Causal authorization (AGNTCY)   | BLOCK/PASS |
-| 4      | L2b   | Semantic scope assertion        | BLOCK/PASS |
-| 4b     | L2b   | Output validation               | BLOCK/PASS |
-| 5      | L3    | Cedar policy (unconditional)    | BLOCK/PASS |
+| Stage  | Layer  | Check                           | Verdict    |
+|--------|--------|---------------------------------|------------|
+| 0      | Stage0 | Invisible Unicode scan          | BLOCK/PASS |
+| 1a     | L1     | npm sigstore provenance         | WARN/PASS  |
+| 1a     | L1     | OSV vulnerability database      | WARN/PASS  |
+| 1b     | L1     | Typosquat + MCP skill scanner   | WARN/PASS  |
+| 2      | L0.5   | MCP registration integrity      | BLOCK/PASS |
+| 3      | L2     | Causal authorization (AGNTCY)   | BLOCK/PASS |
+| 4      | L2b    | Semantic scope assertion        | BLOCK/PASS |
+| 4b     | L2b    | Output validation               | BLOCK/PASS |
+| 5      | L3     | Cedar policy (unconditional)    | BLOCK/PASS |
 
 **Stages 1a/1b are advisory (WARN).** Stages 0, 2, 3, 4, 4b, 5 are hard gates
 (BLOCK halts delivery of the tool result to the model).
@@ -93,6 +97,35 @@ SCENARIO 1: SANDWORM_MODE (supply-chain + 48h delayed activation)
 [STAGE 4]  Semantic scope    → BLOCK | /home/user/.ssh/id_rsa outside declared scope
 [STAGE 4b] Output validation → BLOCK | output_injection_phrase
 [STAGE 5]  Cedar policy      → BLOCK | sandworm_mode:deny_ssh_access
+```
+
+---
+
+## Live OTel Traces (Optional)
+
+To see `security.*` spans flow into a real trace backend:
+
+```bash
+pip install ioa_observe_sdk
+git clone https://github.com/agntcy/observe.git
+cd observe/deploy && docker compose up -d
+cd ../..
+export OTLP_HTTP_ENDPOINT=http://localhost:4318
+PYTHONPATH=. python simulate/run_demo.py
+```
+
+Query detections in ClickHouse:
+
+```bash
+docker exec -it clickhouse-server clickhouse-client --query \
+"SELECT SpanAttributes['security.layer'] AS layer,
+        SpanAttributes['security.verdict'] AS verdict,
+        SpanAttributes['security.detection_type'] AS detection,
+        SpanAttributes['security.observed_scope'] AS observed_scope,
+        SpanAttributes['gen_ai.task.requester'] AS requester
+ FROM otel_traces
+ WHERE SpanAttributes['security.verdict'] = 'BLOCK'
+ ORDER BY Timestamp ASC FORMAT Pretty"
 ```
 
 ---
@@ -187,11 +220,11 @@ trace_id, span_id, stage, layer, verdict, detection_type, evidence
 Stage 4 additionally emits five security fields on every span (including PASS):
 
 ```
-gen_ai.security.tool_description_hash
-gen_ai.security.declared_scope
-gen_ai.security.observed_scope
-gen_ai.security.declared_destinations
-gen_ai.security.observed_egress
+security.tool_description_hash
+security.declared_scope
+security.observed_scope
+security.declared_destinations
+security.observed_egress
 ```
 
 These fields are the **AGNTCY upstream OTel contribution**: the behavioral
@@ -230,7 +263,7 @@ IS the Policy Root.
 
 This POC surfaces three concrete proposals for upstream standardization:
 
-1. **OTel semantic conventions for MCP tool calls.** The five `gen_ai.security.*`
+1. **OTel semantic conventions for MCP tool calls.** The five `security.*`
    fields emitted by Stage 4 should be standardized so SIEM tools can consume
    them without custom parsers.
 
@@ -243,4 +276,3 @@ This POC surfaces three concrete proposals for upstream standardization:
    (`MCPServer`, `Action::"file_read"`, `Action::"network_egress"`) would let
    organizations compose policies across tools.
 
-Issues, PRs, and forks welcome.
