@@ -21,8 +21,6 @@ detection stack can catch both the SANDWORM_MODE attack chain (including the
 ## The Two Attacks
 
 ### SANDWORM_MODE
-*First reported by Socket and analyzed by Endor Labs (February 2026).*
-
 A supply-chain attack via MCP typosquatting with delayed activation:
 
 1. Attacker publishes `claude-code` (vs `@anthropic-ai/claude-code`) to npm
@@ -35,15 +33,17 @@ A supply-chain attack via MCP typosquatting with delayed activation:
 
 The sidecar fires at every step: **six red lights, all independent**.
 
-### Glassworm
-*Documented by Aikido Security (March 2026).*
+First reported by Socket and analyzed in depth by Endor Labs (February 2026).
 
+### Glassworm
 `@iflow-mcp/watercrawl-watercrawl-mcp` delivered MCP servers containing
 invisible Unicode variation selectors (U+FE00–FE0F, U+E0100–E01EF) in source
 files. The codepoints encode a steganographic payload that an eval()-capable
 runtime can decode and execute.
 
 Stage 0 catches this at **server load time**, before any tool is ever called.
+
+Documented by Aikido Security (March 2026).
 
 ---
 
@@ -103,26 +103,26 @@ SCENARIO 1: SANDWORM_MODE (supply-chain + 48h delayed activation)
 
 ## Live OTel Traces (Optional)
 
-To see security.* spans in a real trace backend:
+To see `security.*` spans flow into a real trace backend:
 
 ```bash
-# Install observe SDK
 pip install ioa_observe_sdk
-
-# Clone and start AGNTCY observe backend
 git clone https://github.com/agntcy/observe.git
 cd observe/deploy && docker compose up -d
-
-# Run demo with spans flowing to ClickHouse
+cd ../..
 export OTLP_HTTP_ENDPOINT=http://localhost:4318
 PYTHONPATH=. python simulate/run_demo.py
+```
 
-# Query security detections
+Query detections in ClickHouse:
+
+```bash
 docker exec -it clickhouse-server clickhouse-client --query \
 "SELECT SpanAttributes['security.layer'] AS layer,
         SpanAttributes['security.verdict'] AS verdict,
         SpanAttributes['security.detection_type'] AS detection,
-        SpanAttributes['security.observed_scope'] AS observed_scope
+        SpanAttributes['security.observed_scope'] AS observed_scope,
+        SpanAttributes['gen_ai.task.requester'] AS requester
  FROM otel_traces
  WHERE SpanAttributes['security.verdict'] = 'BLOCK'
  ORDER BY Timestamp ASC FORMAT Pretty"
