@@ -11,3 +11,4 @@ build/
 .env
 poc/
 feeds/osv_cache.json
+observe/

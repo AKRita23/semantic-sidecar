@@ -65,34 +65,65 @@ class BadgeVerifier(ABC):
 
 class AgntcyBadgeVerifier(BadgeVerifier):
     """
-    Production verifier using the AGNTCY identity SDK.
+    Production verifier using the AGNTCY identity SDK (agntcy-identity-sdk).
     Verification is permissionless — no IdP or credentials required.
-    Degrades gracefully if agntcy_identity is not installed.
+    Requires IDENTITY_NODE_GRPC_SERVER_URL env var pointing to an Identity Node.
+    Degrades gracefully if the SDK is not installed or the node is unreachable.
+
+    Usage:
+        from agntcyidentity.sdk import IdentitySdk
+        sdk = IdentitySdk()
+        badge = sdk.get_badge(metadata_id)   # fetches EnvelopedCredential
+        result = sdk.verify_badge(badge)     # returns VerificationResult
     """
 
     def verify(self, metadata_id: str) -> BadgeResult:
         try:
-            from agntcy_identity import verify_badge  # type: ignore
-            result = verify_badge(metadata_id=metadata_id)
+            from agntcyidentity.sdk import IdentitySdk  # type: ignore
+            from google.protobuf.json_format import MessageToDict  # type: ignore
+
+            sdk = IdentitySdk()
+            badge = sdk.get_badge(metadata_id)
+            result = sdk.verify_badge(badge)
+
+            # Extract credential subject content (google.protobuf.Struct → dict)
+            content: dict = {}
+            if result.document and result.document.HasField("content"):
+                content = MessageToDict(result.document.content)
+
+            # Tool names from McpServer.tools list
+            tools = content.get("tools", [])
+            capabilities = [t["name"] for t in tools if isinstance(t, dict) and "name" in t]
+
+            # Scope/destination fields — application-specific claims in content Struct
+            declared_scope = content.get("declaredScope", content.get("declared_scope", []))
+            declared_destinations = content.get(
+                "declaredDestinations", content.get("declared_destinations", [])
+            )
+
+            issuer = ""
             expires_at = None
-            if result.get("expires_at"):
-                try:
-                    expires_at = datetime.fromisoformat(result["expires_at"])
-                except (ValueError, TypeError):
-                    pass
+            if result.document:
+                issuer = result.document.issuer or ""
+                if result.document.expiration_date:
+                    try:
+                        expires_at = datetime.fromisoformat(result.document.expiration_date)
+                    except (ValueError, TypeError):
+                        pass
+
             return BadgeResult(
-                valid=result.get("valid", False),
-                capabilities=result.get("capabilities", []),
-                declared_scope=result.get("declared_scope", []),
-                declared_destinations=result.get("declared_destinations", []),
-                issuer=result.get("issuer", ""),
+                valid=bool(result.status),
+                capabilities=capabilities,
+                declared_scope=declared_scope if isinstance(declared_scope, list) else [],
+                declared_destinations=declared_destinations if isinstance(declared_destinations, list) else [],
+                issuer=issuer,
                 expires_at=expires_at,
-                evidence=result,
+                evidence={"metadata_id": metadata_id, "content": content},
             )
         except ImportError:
             return BadgeResult(
                 valid=False,
-                evidence={"error": "agntcy_identity SDK not installed"},
+                evidence={"error": "agntcy-identity-sdk not installed"},
             )
         except Exception as exc:
             return BadgeResult(
