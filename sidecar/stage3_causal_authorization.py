@@ -69,25 +69,56 @@ class AgentBadgeVerifier(ABC):
 
 class AgntcyAgentBadgeVerifier(AgentBadgeVerifier):
     """
-    Production verifier using the AGNTCY identity SDK.
+    Production verifier using the AGNTCY identity SDK (agntcy-identity-sdk).
     Verification is permissionless — no IdP or credentials required.
-    Degrades gracefully if agntcy_identity is not installed.
+    Requires IDENTITY_NODE_GRPC_SERVER_URL env var pointing to an Identity Node.
+    Degrades gracefully if the SDK is not installed or the node is unreachable.
+
+    Usage:
+        from agntcyidentity.sdk import IdentitySdk
+        sdk = IdentitySdk()
+        badge = sdk.get_badge(metadata_id)   # fetches EnvelopedCredential
+        result = sdk.verify_badge(badge)     # returns VerificationResult
     """
 
     def verify(self, metadata_id: str) -> AgentBadgeResult:
         try:
-            from agntcy_identity import verify_badge  # type: ignore
-            result = verify_badge(metadata_id=metadata_id)
-            issued_at = _parse_dt(result.get("issued_at"))
-            expires_at = _parse_dt(result.get("expires_at"))
+            from agntcyidentity.sdk import IdentitySdk  # type: ignore
+            from google.protobuf.json_format import MessageToDict  # type: ignore
+
+            sdk = IdentitySdk()
+            badge = sdk.get_badge(metadata_id)
+            result = sdk.verify_badge(badge)
+
+            # Extract credential subject content (google.protobuf.Struct → dict)
+            content: dict = {}
+            if result.document and result.document.HasField("content"):
+                content = MessageToDict(result.document.content)
+
+            # Agent badge carries application-specific claims in content Struct
+            authorized_by = content.get("authorizedBy", content.get("authorized_by", ""))
+            permitted_tools = content.get("permittedTools", content.get("permitted_tools", []))
+            if not isinstance(permitted_tools, list):
+                permitted_tools = []
+
+            issuer = ""
+            issued_at = _now()
+            expires_at = _now()
+            if result.document:
+                issuer = result.document.issuer or ""
+                if result.document.issuance_date:
+                    issued_at = _parse_dt(result.document.issuance_date) or _now()
+                if result.document.expiration_date:
+                    expires_at = _parse_dt(result.document.expiration_date) or _now()
+
             return AgentBadgeResult(
-                valid=result.get("valid", False),
-                authorized_by=result.get("authorized_by", ""),
-                permitted_tools=result.get("permitted_tools", []),
-                issued_at=issued_at or _now(),
-                expires_at=expires_at or _now(),
-                issuer=result.get("issuer", ""),
-                evidence=result,
+                valid=bool(result.status),
+                authorized_by=authorized_by,
+                permitted_tools=permitted_tools,
+                issued_at=issued_at,
+                expires_at=expires_at,
+                issuer=issuer,
+                evidence={"metadata_id": metadata_id, "content": content},
             )
         except ImportError:
             return AgentBadgeResult(
@@ -97,7 +128,7 @@ class AgntcyAgentBadgeVerifier(AgentBadgeVerifier):
                 issued_at=_now(),
                 expires_at=_now(),
                 issuer="",
-                evidence={"error": "agntcy_identity SDK not installed"},
+                evidence={"error": "agntcy-identity-sdk not installed"},
             )
         except Exception as exc:
             return AgentBadgeResult(

@@ -1,5 +1,5 @@
 ioa-observe-sdk>=1.0.35
-agntcy-identity>=0.1.0
+agntcy-identity-sdk @ git+https://github.com/agntcy/identity.git#subdirectory=sdk/python
 cedarpy>=4.1.0
 psutil>=5.9.0
 mitmproxy>=10.0.0
