@@ -276,4 +276,3 @@ This POC surfaces three concrete proposals for upstream standardization:
    (`MCPServer`, `Action::"file_read"`, `Action::"network_egress"`) would let
    organizations compose policies across tools.
 
-Issues, PRs, and forks welcome.
