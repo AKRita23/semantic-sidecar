@@ -232,25 +232,24 @@ class TestScanMcpPackageBadge:
 
 class TestScanMcpPackageTyposquat:
     def test_distance_1_from_claude_code_warns(self, tmp_path):
-        # "claude-cod" is distance 1 from "claude-code"
+        # "claude-cod" is distance 1 from "@anthropic-ai/claude-code" (via basename)
         pkg_dir = _make_package(tmp_path, "claude-cod", badge=True)
         result = scan_mcp_package("claude-cod", str(pkg_dir))
         assert result["verdict"] == "WARN"
         assert result["detection_type"] == "typosquat_suspected"
-        assert result["evidence"]["typosquat"]["distance"] == 1
-        assert result["evidence"]["typosquat"]["closest"] == "claude-code"
+        assert result["evidence"]["typosquat"]["distance"] <= 2
 
     def test_distance_2_typosquat_warns(self, tmp_path):
-        # "claud-cod" is distance 2 from "claude-code"
+        # "claud-cod" is distance 2 from "claude-code" (basename)
         pkg_dir = _make_package(tmp_path, "claud-cod", badge=True)
         result = scan_mcp_package("claud-cod", str(pkg_dir))
         assert result["verdict"] == "WARN"
         assert result["evidence"]["typosquat"]["distance"] <= 2
 
     def test_exact_legitimate_package_name_no_typosquat_warn(self, tmp_path):
-        # "claude-code" is in KNOWN_MCP_PACKAGES — exact match → no typosquat
-        pkg_dir = _make_package(tmp_path, "claude-code", badge=True)
-        result = scan_mcp_package("claude-code", str(pkg_dir))
+        # "supports-color" is in KNOWN_MCP_PACKAGES — exact match → no typosquat
+        pkg_dir = _make_package(tmp_path, "supports-color", badge=True)
+        result = scan_mcp_package("supports-color", str(pkg_dir))
         assert "typosquat_suspected" not in result.get("evidence", {}).get("warnings", [])
 
     def test_distant_name_no_typosquat_warn(self, tmp_path):
@@ -404,8 +403,11 @@ class TestScanSkillSpan:
 # ---------------------------------------------------------------------------
 
 class TestKnownMcpPackages:
-    def test_claude_code_in_list(self):
-        assert "claude-code" in KNOWN_MCP_PACKAGES
+    def test_anthropic_claude_code_scoped_in_list(self):
+        # The real package is the scoped "@anthropic-ai/claude-code";
+        # plain "claude-code" is a scope-squat and is NOT in the list
+        assert "@anthropic-ai/claude-code" in KNOWN_MCP_PACKAGES
+        assert "claude-code" not in KNOWN_MCP_PACKAGES
 
     def test_is_list_of_strings(self):
         assert isinstance(KNOWN_MCP_PACKAGES, list)

@@ -7,6 +7,10 @@
       "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "badge_metadata_id": "did:agntcy:mcp:lint-checker-v1.2",
       "declared_capabilities": ["lint_check", "read_staged_files"],
+      "tool_description_hashes": {
+        "lint_check": "",
+        "read_staged_files": ""
+      },
       "declared_scope": ["./staged_files/", "./.git/"],
       "declared_destinations": []
     }

@@ -42,9 +42,10 @@ MCP_CONFIG_PATHS = [
 ]
 
 KNOWN_MCP_PACKAGES = [
-    "claude-code",
     "anthropic",
     "openai",
+    "@anthropic-ai/claude-code",
+    "@anthropic-ai/sdk",
     "@anthropic-ai/mcp",
     "@modelcontextprotocol/server-filesystem",
     "@modelcontextprotocol/server-github",
